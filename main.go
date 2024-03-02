@@ -1,10 +1,14 @@
 package main
 
 import (
+	"crypto/tls"
+	"encoding/json"
 	"html/template"
+	"io"
 	"log"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -45,6 +49,59 @@ type TotalStudents struct {
 type TotalReviews struct {
 	Sum int
 }
+type TotalReviewResponse struct {
+	TotalReviews int `json:"totalReviews"`
+}
+
+type TotalStudentsResponse struct {
+	TotalStudents int `json:"totalStudents"`
+}
+
+type ResponseToken struct {
+	AccessToken string `json:"access_token"`
+}
+
+const ACCEPT = "application/json"
+
+// function que recupera token jwt
+func FetchAccessToken() (string, error) {
+
+	apiUrl := os.Getenv("TOKEN_API_URL")
+	authorization := os.Getenv("AUTHORIZATION")
+	tr := &http.Transport{
+		TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+	}
+	client := &http.Client{Transport: tr}
+	var data = strings.NewReader(`grant_type=client_credentials`)
+
+	req, err := http.NewRequest("POST", apiUrl, data)
+	if err != nil {
+		println(err)
+		log.Fatal(err)
+	}
+
+	req.Header.Set("Authorization", authorization)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := client.Do(req)
+	if err != nil {
+		println(err)
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	bodyText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	var tokenResponse ResponseToken
+	err = json.Unmarshal(bodyText, &tokenResponse)
+	if err != nil {
+		return "", err
+	}
+	return tokenResponse.AccessToken, nil
+}
 
 func main() {
 	logFile, err := os.OpenFile("application.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
@@ -64,21 +121,32 @@ func main() {
 	}
 
 	r := gin.Default()
+	apiurl := os.Getenv("API_URL")
 
 	r.Static("/static", "./templates")
 	r.LoadHTMLGlob("templates/*.html")
 
 	r.GET("/", func(c *gin.Context) {
 		var courses []CourseData
-		if err := db.Find(&courses).Error; err != nil {
-			log.Printf("Erro ao buscar cursos: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar cursos"})
+
+		//if err := db.Find(&courses).Error; err != nil {
+		//	log.Printf("Erro ao buscar cursos: %v", err)
+		//	c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar cursos"})
+		//	return
+		//}
+
+		feedItems := loadFeed()
+
+		token, err := FetchAccessToken()
+		if err != nil {
+			log.Printf("Erro ao obter token: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao obter token"})
 			return
 		}
 
-		feedItems := loadFeed()
-		totalStudents := getTotalStudents(db)
-		totalReviews := getTotalReviews(db)
+		totalStudents := getTotalStudents(apiurl, token)
+		totalReviews := getTotalReviews(apiurl, token)
+		courses = getCourses(apiurl, token)
 
 		c.HTML(http.StatusOK, "index.html", gin.H{
 			"courses":       courses,
@@ -91,16 +159,98 @@ func main() {
 	r.Run() // Executar o servidor na porta 8080
 }
 
-func getTotalStudents(db *gorm.DB) int {
-	var total TotalStudents
-	db.Model(&CourseData{}).Select("sum(num_students) as sum").Scan(&total)
-	return total.Sum
+func getCourses(apiurl string, token string) []CourseData {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", apiurl, nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	req.Header.Set("accept", ACCEPT)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+
+	bodyText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("body: %s\n", bodyText)
+
+	// Deserializa o corpo da resposta diretamente em um slice de CourseData
+	var courses []CourseData
+	err = json.Unmarshal(bodyText, &courses)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return courses
 }
 
-func getTotalReviews(db *gorm.DB) int {
-	var total TotalReviews
-	db.Model(&CourseData{}).Select("sum(num_reviews) as sum").Scan(&total)
-	return total.Sum
+func getTotalStudents(apiurl string, token string) int {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", apiurl+"totalStudents", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	req.Header.Set("accept", ACCEPT)
+	req.Header.Set("Authorization", "Bearer "+token)
+	//req.Header.Set("API-Key", apikey)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	bodyText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("body: %s\n", bodyText)
+
+	// Deserializa o corpo da resposta para a struct TotalReviewResponse
+	var response TotalStudentsResponse
+	err = json.Unmarshal(bodyText, &response)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("total students: ", response)
+	return response.TotalStudents
+
+}
+
+func getTotalReviews(apiurl string, token string) int {
+	client := &http.Client{}
+	req, err := http.NewRequest("GET", apiurl+"totalReviews", nil)
+	if err != nil {
+		log.Fatal(err)
+	}
+	req.Header.Set("accept", ACCEPT)
+	req.Header.Set("Authorization", "Bearer "+token)
+
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer resp.Body.Close()
+	bodyText, err := io.ReadAll(resp.Body)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Printf("body total reviews: %s\n", bodyText)
+
+	// Deserializa o corpo da resposta para a struct TotalReviewResponse
+	var response TotalReviewResponse
+	err = json.Unmarshal(bodyText, &response)
+	if err != nil {
+		log.Fatal(err)
+	}
+	log.Println("total reviews: ", response)
+	return response.TotalReviews
+
 }
 
 func loadFeed() []FeedItem {
