@@ -98,6 +98,7 @@ func FetchAccessToken() (string, error) {
 	if err != nil {
 		return "", err
 	}
+	println("token: ", tokenResponse.AccessToken)
 	return tokenResponse.AccessToken, nil
 }
 
@@ -123,9 +124,9 @@ func main() {
 			return
 		}
 
-		totalStudents := getTotalStudents(apiurl, token)
-		totalReviews := getTotalReviews(apiurl, token)
 		courses = getCourses(apiurl, token)
+		totalReviews := getTotalReviews(apiurl, token)
+		totalStudents := getTotalStudents(apiurl, token)
 
 		c.HTML(http.StatusOK, "index.html", gin.H{
 			"courses":       courses,
@@ -155,9 +156,10 @@ func getCourses(apiurl string, token string) []CourseData {
 
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
+		log.Println("retorno do erro getCourses: ", err)
 		log.Fatal(err)
 	}
-	log.Printf("body: %s\n", bodyText)
+	log.Printf("body getCourses: %s\n", bodyText)
 
 	// Deserializa o corpo da resposta diretamente em um slice de CourseData
 	var courses []CourseData
@@ -177,27 +179,27 @@ func getTotalStudents(apiurl string, token string) int {
 	}
 	req.Header.Set("accept", ACCEPT)
 	req.Header.Set("Authorization", "Bearer "+token)
-	//req.Header.Set("API-Key", apikey)
 
 	resp, err := client.Do(req)
 	if err != nil {
 		println(err)
 		log.Fatal(err)
 	}
+
 	defer resp.Body.Close()
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
-		println(err)
-		log.Fatal(err)
+		println("erro total students: ", err)
+		log.Println(err)
 	}
-	log.Printf("body: %s\n", bodyText)
+	log.Printf("body total students: %s\n", bodyText)
 
 	// Deserializa o corpo da resposta para a struct TotalReviewResponse
 	var response TotalStudentsResponse
 	err = json.Unmarshal(bodyText, &response)
 	if err != nil {
 		println(err)
-		log.Fatal(err)
+		log.Println(err)
 	}
 	log.Println("total students: ", response)
 	return response.TotalStudents
@@ -208,7 +210,7 @@ func getTotalReviews(apiurl string, token string) int {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", apiurl+"totalReviews", nil)
 	if err != nil {
-		println(err)
+		println("erro chamada total review: ", err)
 		log.Fatal(err)
 	}
 	req.Header.Set("accept", ACCEPT)
@@ -216,23 +218,24 @@ func getTotalReviews(apiurl string, token string) int {
 
 	resp, err := client.Do(req)
 	if err != nil {
-		println(err)
+		println("erro chamada total review: ", err)
 		log.Fatal(err)
 	}
+	println("resposta total review: ", resp.StatusCode)
 	defer resp.Body.Close()
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
-		println(err)
+		println("erro chamada total review: ", err)
 		log.Fatal(err)
 	}
-	log.Printf("body total reviews: %s\n", bodyText)
+	log.Printf("body total reviews: %s\n\n", bodyText)
 
 	// Deserializa o corpo da resposta para a struct TotalReviewResponse
 	var response TotalReviewResponse
 	err = json.Unmarshal(bodyText, &response)
 	if err != nil {
 		println(err)
-		log.Fatal(err)
+		log.Println(err)
 	}
 	log.Println("total reviews: ", response)
 	return response.TotalReviews
