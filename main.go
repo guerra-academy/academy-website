@@ -102,15 +102,10 @@ func FetchAccessToken() (string, error) {
 }
 
 func main() {
-	logFile, err := os.OpenFile("application.log", os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
-	if err != nil {
-		log.Fatalf("Erro ao abrir o arquivo de log: %v", err)
-	}
-	defer logFile.Close()
-	log.SetOutput(logFile)
-
+	log.SetOutput(os.Stdout)
 	r := gin.Default()
 	apiurl := os.Getenv("API_URL")
+	log.Println("api url: ", apiurl)
 
 	r.Static("/static", "./templates")
 	r.LoadHTMLGlob("templates/*.html")
