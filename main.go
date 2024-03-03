@@ -13,8 +13,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mmcdole/gofeed"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 type ApiResponse struct {
@@ -24,7 +22,6 @@ type ApiResponse struct {
 }
 
 type CourseData struct {
-	gorm.Model
 	CourseID    int     `json:"course_id"`
 	Title       string  `json:"title"`
 	Rating      float64 `json:"rating"`
@@ -111,15 +108,6 @@ func main() {
 	defer logFile.Close()
 	log.SetOutput(logFile)
 
-	db, err := gorm.Open(sqlite.Open("cursos.db"), &gorm.Config{})
-	if err != nil {
-		log.Fatalf("Erro ao conectar ao banco de dados SQLite: %v", err)
-	}
-
-	if err := db.AutoMigrate(&CourseData{}); err != nil {
-		log.Fatalf("Erro ao migrar banco de dados: %v", err)
-	}
-
 	r := gin.Default()
 	apiurl := os.Getenv("API_URL")
 
@@ -128,12 +116,6 @@ func main() {
 
 	r.GET("/", func(c *gin.Context) {
 		var courses []CourseData
-
-		//if err := db.Find(&courses).Error; err != nil {
-		//	log.Printf("Erro ao buscar cursos: %v", err)
-		//	c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao buscar cursos"})
-		//	return
-		//}
 
 		feedItems := loadFeed()
 
