@@ -89,6 +89,7 @@ func FetchAccessToken() (string, error) {
 
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
+		println(err)
 		log.Fatal(err)
 	}
 
@@ -121,6 +122,7 @@ func main() {
 
 		token, err := FetchAccessToken()
 		if err != nil {
+			println("Erro ao obter token: %v", err)
 			log.Printf("Erro ao obter token: %v", err)
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao obter token"})
 			return
@@ -184,11 +186,13 @@ func getTotalStudents(apiurl string, token string) int {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		println(err)
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
+		println(err)
 		log.Fatal(err)
 	}
 	log.Printf("body: %s\n", bodyText)
@@ -197,6 +201,7 @@ func getTotalStudents(apiurl string, token string) int {
 	var response TotalStudentsResponse
 	err = json.Unmarshal(bodyText, &response)
 	if err != nil {
+		println(err)
 		log.Fatal(err)
 	}
 	log.Println("total students: ", response)
@@ -208,6 +213,7 @@ func getTotalReviews(apiurl string, token string) int {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", apiurl+"totalReviews", nil)
 	if err != nil {
+		println(err)
 		log.Fatal(err)
 	}
 	req.Header.Set("accept", ACCEPT)
@@ -215,11 +221,13 @@ func getTotalReviews(apiurl string, token string) int {
 
 	resp, err := client.Do(req)
 	if err != nil {
+		println(err)
 		log.Fatal(err)
 	}
 	defer resp.Body.Close()
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
+		println(err)
 		log.Fatal(err)
 	}
 	log.Printf("body total reviews: %s\n", bodyText)
@@ -228,6 +236,7 @@ func getTotalReviews(apiurl string, token string) int {
 	var response TotalReviewResponse
 	err = json.Unmarshal(bodyText, &response)
 	if err != nil {
+		println(err)
 		log.Fatal(err)
 	}
 	log.Println("total reviews: ", response)
