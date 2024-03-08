@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Welcome to Guerra Academy</title>
+    <style>
+      body {
+        font-family: Roboto, "Helvetica Neue", Helvetica, Arial, sans-serif;
+        line-height: 1.6;
+        color: #333333;
+      }
+      .container {
+        max-width: 650px;
+        margin: 0 auto;
+        padding: 20px;
+        background-color: #ffffff;
+      }
+      .button {
+        display: block;
+        margin: 0 auto;
+        padding: 12px 30px;
+        font-size: 18px;
+        background-color: #ffffff;
+        color: #06bbcc;
+        text-align: center;
+        text-decoration: none;
+        border: 2px solid #06bbcc;
+        border-radius: 3px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <p>Welcome <strong>{{.Name}}</strong>!</p>
+      <p>Your registration at <strong>Guerra Academy</strong> is confirmed.</p>
+      <p>
+        Keep an eye on notifications and main events through our Newsletter!
+      </p>
+      <p>Join the WhatsApp channel to receive notifications about our event.</p>
+      <a
+        class="button"
+        href="https://chat.whatsapp.com/IzUJs4SC7aZDfdmZXhsDKO"
+        target="_blank"
+        >Join the WhatsApp Group</a
+      >
+      <hr />
+      <p>
+        Stay tuned for notifications, as gifts will be released during the event
+        week. Books and courses will be raffled live!
+      </p>
+      <p>Thank you!<br />Glaucio Guerra - Guerra Academy</p>
+      <p>
+        To no longer receive our emails,
+        <a href="https://{{.Site}}/unsubscribe?email={{.Email}}">click here</a>.
+      </p>
+    </div>
+  </body>
+</html>

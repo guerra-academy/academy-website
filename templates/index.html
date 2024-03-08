@@ -352,7 +352,7 @@
                 <div class="col-lg-6 wow fadeInUp" data-wow-delay="0.3s">
                     <h6 class="section-title bg-white text-start text-primary pe-3">Newsletter DevOps</h6>
                     <h1 class="mb-4">Register</h1>
-                    <form action="https://trilhadevops.guerra.academy/adicionar" method="post" id="form-trilha">
+                    <form action="/adicionar" method="post" id="form-trilha">
                         <div class="mb-3">
                             <label for="email" class="form-label">Email</label>
                             <input type="email" class="form-control" id="email" name="email" placeholder="your best email">
@@ -362,7 +362,7 @@
                             <label for="nome" class="form-label">Name</label>
                             <input type="text" class="form-control" id="nome" name="nome" placeholder="Name">
                         </div>
-                        <button type="submit" class="btn btn-primary g-recaptcha" data-sitekey="6LewbucnAAAAAPhLrCTJgFLIaeyH_wlOUFQg8vGd" data-callback='onSubmit' data-action='submit'>REGISTER NOW</button>
+                        <button type="submit" class="btn btn-primary g-recaptcha" data-sitekey="{{.sitekey}}" data-callback='onSubmit' data-action='submit'>REGISTER NOW</button>
                     </form>
                     
                 </div>

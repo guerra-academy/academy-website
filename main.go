@@ -1,17 +1,24 @@
 package main
 
 import (
+	"bytes"
 	"crypto/tls"
 	"encoding/json"
+	"fmt"
 	"html/template"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
+	"net/mail"
+	"net/smtp"
 	"os"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jinzhu/gorm"
+	_ "github.com/jinzhu/gorm/dialects/postgres"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -43,6 +50,11 @@ type TotalStudents struct {
 	Sum int
 }
 
+type RecaptchaResponse struct {
+	Success    bool     `json:"success"`
+	ErrorCodes []string `json:"error-codes"`
+}
+
 type TotalReviews struct {
 	Sum int
 }
@@ -60,6 +72,75 @@ type ResponseToken struct {
 
 const ACCEPT = "application/json"
 
+type Usuario struct {
+	ID         uint      `gorm:"primary_key"`
+	Nome       string    `form:"nome"`
+	Email      string    `form:"email"`
+	Subscribed int       `json:"subscribed"`
+	DataHora   time.Time `json:"data_hora"`
+	Recaptcha  string    `form:"g-recaptcha-response"`
+	CodRec     string    `form:"codRec"`
+	GerouCert  int       `json:"gerou_cert"`
+}
+
+var (
+	SMTPSERVER     = os.Getenv("SMTPSERVER")
+	SMTPPORT       = os.Getenv("SMTPPORT")
+	SMTPUSER       = os.Getenv("SMTPUSER")
+	SMTPPASS       = os.Getenv("SMTPPASS")
+	CAPTCHASECRET  = os.Getenv("CAPTCHASECRET")
+	DSN            = os.Getenv("DSN")
+	SITE           = os.Getenv("SITE")
+	CAPTCHASITEKEY = os.Getenv("CAPTCHASITEKEY")
+)
+
+func validateEmail(email string) bool {
+	_, err := mail.ParseAddress(email)
+	return err == nil
+}
+
+func validateRecaptcha(response string) bool {
+	// Montando o corpo da requisição
+	body := fmt.Sprintf("secret=%s&response=%s", CAPTCHASECRET, response)
+
+	// Criando uma requisição POST
+	url := "https://www.google.com/recaptcha/api/siteverify"
+	req, err := http.NewRequest("POST", url, bytes.NewBufferString(body))
+	if err != nil {
+		log.Println("Erro ao criar a requisição:", err)
+		return false
+	}
+
+	// Definindo o cabeçalho da requisição
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	// Realizando a chamada HTTP
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Println("Erro ao fazer a chamada HTTP:", err)
+		return false
+	}
+	defer resp.Body.Close()
+
+	// Decodificando a resposta JSON
+	var recaptchaResponse RecaptchaResponse
+	err = json.NewDecoder(resp.Body).Decode(&recaptchaResponse)
+	if err != nil {
+		log.Println("Erro ao decodificar a resposta JSON:", err)
+		return false
+	}
+
+	// Validando a resposta
+	if recaptchaResponse.Success {
+		return true
+	} else {
+		log.Println("reCAPTCHA inválido!")
+		log.Println(recaptchaResponse)
+		return false
+	}
+}
+
 // function que recupera token jwt
 func FetchAccessToken() (string, error) {
 
@@ -74,7 +155,7 @@ func FetchAccessToken() (string, error) {
 	req, err := http.NewRequest("POST", apiUrl, data)
 	if err != nil {
 		println(err)
-		log.Fatal(err)
+		log.Println("Error to get access token: ", err)
 	}
 
 	req.Header.Set("Authorization", authorization)
@@ -83,14 +164,14 @@ func FetchAccessToken() (string, error) {
 	resp, err := client.Do(req)
 	if err != nil {
 		println(err)
-		log.Fatal(err)
+		log.Println("Error to get access token: ", err)
 	}
 	defer resp.Body.Close()
 
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
 		println(err)
-		log.Fatal(err)
+		log.Println("Error to get access token: ", err)
 	}
 
 	var tokenResponse ResponseToken
@@ -102,14 +183,118 @@ func FetchAccessToken() (string, error) {
 	return tokenResponse.AccessToken, nil
 }
 
+func sendEmail(name, from, to, subject, body string) error {
+	auth := smtp.PlainAuth("", SMTPUSER, SMTPPASS, SMTPSERVER)
+	// Ler o conteúdo do template HTML
+	templateContent, err := ioutil.ReadFile("templates/boasvindas.html")
+	if err != nil {
+		return err
+	}
+	data := struct {
+		Nome  string
+		Email string
+		Site  string
+	}{
+		Nome:  name,
+		Email: to,
+		Site:  SITE,
+	}
+	bodyMail := new(bytes.Buffer)
+	tmpl := template.Must(template.New("bemvindo").Parse(string(templateContent)))
+	err = tmpl.Execute(bodyMail, data)
+	if err != nil {
+		return err
+	}
+
+	msg := []byte("To: " + to + "\r\n" +
+		"From: " + from + "\r\n" +
+		"Subject: " + subject + "\r\n" +
+		"MIME-Version: 1.0\r\n" +
+		"Content-Type: text/html; charset=\"utf-8\"\r\n" +
+		"\r\n" +
+		bodyMail.String() + "\r\n")
+
+	err = smtp.SendMail(SMTPSERVER+":"+SMTPPORT, auth, from, []string{to}, msg)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func main() {
+
 	log.SetOutput(os.Stdout)
+	log.Println("iniciando app")
 	r := gin.Default()
 	apiurl := os.Getenv("API_URL")
 	log.Println("api url: ", apiurl)
 
 	r.Static("/static", "./templates")
 	r.LoadHTMLGlob("templates/*.html")
+	log.Println("abrindo banco postgres...")
+	db, err := gorm.Open("postgres", DSN)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
+	// Migração automática para criar as tabelas de Usuários e Recomendacoes
+	db.AutoMigrate(&Usuario{})
+
+	r.POST("/adicionar", func(c *gin.Context) {
+		var usuario Usuario
+		now := time.Now()
+
+		// Obtém os dados do formulário usando ShouldBindWith e o tipo "form"
+		if err := c.ShouldBind(&usuario); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if !validateEmail(usuario.Email) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Email inválido"})
+			return
+		}
+
+		if !validateRecaptcha(usuario.Recaptcha) {
+			log.Println("Recaptcha response:" + usuario.Recaptcha)
+			c.JSON(http.StatusBadRequest, gin.H{"error": "Recaptcha inválido"})
+			return
+		}
+
+		// Define o horário de registro
+		usuario.DataHora = now
+		usuario.Subscribed = 1
+
+		//insere ou atualiza
+		if db.Model(&usuario).Where("email = ?", usuario.Email).Updates(&usuario).RowsAffected == 0 {
+			db.Create(&usuario)
+			emailBody := "Olá " + usuario.Nome + ", welcome to Guerra Academy!"
+			err = sendEmail(usuario.Nome, "noreply@guerra.academy", usuario.Email, "Welcome to Guerra Academy", emailBody)
+			if err != nil {
+				log.Println("Error to send email: " + err.Error())
+			}
+		}
+
+		if err != nil {
+			println(err.Error())
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error to send welcome email."})
+			return
+		}
+
+		// Carregando o template HTML
+		tmpl, err := template.ParseFiles("templates/sucesso.html")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		// Renderizando o template
+		var data struct{}
+		err = tmpl.Execute(c.Writer, data)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	})
 
 	r.GET("/", func(c *gin.Context) {
 		var courses []CourseData
@@ -118,9 +303,9 @@ func main() {
 
 		token, err := FetchAccessToken()
 		if err != nil {
-			println("Erro ao obter token: %v", err)
-			log.Printf("Erro ao obter token: %v", err)
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "Erro ao obter token"})
+			println("Error to get token: %v", err)
+			log.Printf("Error to get token: %v", err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Error to get token."})
 			return
 		}
 
@@ -133,6 +318,7 @@ func main() {
 			"feed":          feedItems,
 			"totalStudents": totalStudents,
 			"totalReviews":  totalReviews,
+			"sitekey":       CAPTCHASITEKEY,
 		})
 	})
 
@@ -156,7 +342,7 @@ func getCourses(apiurl string, token string) []CourseData {
 
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
-		log.Println("retorno do erro getCourses: ", err)
+		log.Println("getCourses: ", err)
 		log.Fatal(err)
 	}
 	log.Printf("body getCourses: %s\n", bodyText)
@@ -210,23 +396,23 @@ func getTotalReviews(apiurl string, token string) int {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", apiurl+"totalReviews", nil)
 	if err != nil {
-		println("erro chamada total review: ", err)
-		log.Fatal(err)
+		println("error to get total reviews: ", err)
+		log.Println(err)
 	}
 	req.Header.Set("accept", ACCEPT)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		println("erro chamada total review: ", err)
-		log.Fatal(err)
+		println("error to get total reviews: ", err)
+		log.Println(err)
 	}
 	println("resposta total review: ", resp.StatusCode)
 	defer resp.Body.Close()
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
 		println("erro chamada total review: ", err)
-		log.Fatal(err)
+		log.Println(err)
 	}
 	log.Printf("body total reviews: %s\n\n", bodyText)
 
