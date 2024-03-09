@@ -101,7 +101,7 @@ func validateEmail(email string) bool {
 }
 
 func validateRecaptcha(response string) bool {
-	// Montando o corpo da requisição
+	// Create request body to validate recaptcha
 	body := fmt.Sprintf("secret=%s&response=%s", CAPTCHASECRET, response)
 
 	// Criando uma requisição POST
@@ -112,7 +112,7 @@ func validateRecaptcha(response string) bool {
 		return false
 	}
 
-	// Definindo o cabeçalho da requisição
+	// header  form urlenconded
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
 
 	// Realizando a chamada HTTP
