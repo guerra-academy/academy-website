@@ -92,6 +92,7 @@ var (
 	DSN            = os.Getenv("DSN")
 	SITE           = os.Getenv("SITE")
 	CAPTCHASITEKEY = os.Getenv("CAPTCHASITEKEY")
+	USERECAPTCHA   = os.Getenv("CAPTCHASITEKEY")
 )
 
 func validateEmail(email string) bool {
@@ -107,7 +108,7 @@ func validateRecaptcha(response string) bool {
 	url := "https://www.google.com/recaptcha/api/siteverify"
 	req, err := http.NewRequest("POST", url, bytes.NewBufferString(body))
 	if err != nil {
-		log.Println("Erro ao criar a requisição:", err)
+		log.Println("Error to call recaptcha:", err)
 		return false
 	}
 
@@ -118,24 +119,23 @@ func validateRecaptcha(response string) bool {
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Println("Erro ao fazer a chamada HTTP:", err)
+		log.Println("Error after call HTTP recaptcha:", err)
 		return false
 	}
 	defer resp.Body.Close()
 
-	// Decodificando a resposta JSON
 	var recaptchaResponse RecaptchaResponse
 	err = json.NewDecoder(resp.Body).Decode(&recaptchaResponse)
 	if err != nil {
-		log.Println("Erro ao decodificar a resposta JSON:", err)
+		log.Println("Error decoding Recaptcha JSON:", err)
 		return false
 	}
 
-	// Validando a resposta
+	// Validade recpatcha response
 	if recaptchaResponse.Success {
 		return true
 	} else {
-		log.Println("reCAPTCHA inválido!")
+		log.Println("Invalid reCAPTCHA!")
 		log.Println(recaptchaResponse)
 		return false
 	}
@@ -155,7 +155,7 @@ func FetchAccessToken() (string, error) {
 	req, err := http.NewRequest("POST", apiUrl, data)
 	if err != nil {
 		println(err)
-		log.Println("Error to get access token: ", err)
+		log.Println("Error to create access token request: ", err)
 	}
 
 	req.Header.Set("Authorization", authorization)
@@ -171,7 +171,7 @@ func FetchAccessToken() (string, error) {
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
 		println(err)
-		log.Println("Error to get access token: ", err)
+		log.Println("Error to parse access token: ", err)
 	}
 
 	var tokenResponse ResponseToken
@@ -224,28 +224,27 @@ func sendEmail(name, from, to, subject, body string) error {
 func main() {
 
 	log.SetOutput(os.Stdout)
-	log.Println("iniciando app")
+	log.Println("starting app...")
 	r := gin.Default()
 	apiurl := os.Getenv("API_URL")
 	log.Println("api url: ", apiurl)
 
 	r.Static("/static", "./templates")
 	r.LoadHTMLGlob("templates/*.html")
-	log.Println("abrindo banco postgres...")
 	db, err := gorm.Open("postgres", DSN)
 	if err != nil {
 		log.Fatal(err)
 	}
 	defer db.Close()
 
-	// Migração automática para criar as tabelas de Usuários e Recomendacoes
+	// Enable GORM Auto migrate
 	db.AutoMigrate(&Usuario{})
 
 	r.POST("/adicionar", func(c *gin.Context) {
 		var usuario Usuario
 		now := time.Now()
 
-		// Obtém os dados do formulário usando ShouldBindWith e o tipo "form"
+		// Get data from form
 		if err := c.ShouldBind(&usuario); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
@@ -261,11 +260,11 @@ func main() {
 			return
 		}
 
-		// Define o horário de registro
+		// set DATE / HOUR and set user to be subscribed
 		usuario.DataHora = now
 		usuario.Subscribed = 1
 
-		//insere ou atualiza
+		//insert or update
 		if db.Model(&usuario).Where("email = ?", usuario.Email).Updates(&usuario).RowsAffected == 0 {
 			db.Create(&usuario)
 			emailBody := "Olá " + usuario.Nome + ", welcome to Guerra Academy!"
@@ -329,21 +328,22 @@ func getCourses(apiurl string, token string) []CourseData {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", apiurl, nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Println("Error geting courses: ", err)
+		log.Println(err)
 	}
 	req.Header.Set("accept", ACCEPT)
 	req.Header.Set("Authorization", "Bearer "+token)
 
 	resp, err := client.Do(req)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	defer resp.Body.Close()
 
 	bodyText, err := io.ReadAll(resp.Body)
 	if err != nil {
 		log.Println("getCourses: ", err)
-		log.Fatal(err)
+		log.Println(err)
 	}
 	log.Printf("body getCourses: %s\n", bodyText)
 
@@ -351,7 +351,7 @@ func getCourses(apiurl string, token string) []CourseData {
 	var courses []CourseData
 	err = json.Unmarshal(bodyText, &courses)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 
 	return courses
@@ -361,7 +361,7 @@ func getTotalStudents(apiurl string, token string) int {
 	client := &http.Client{}
 	req, err := http.NewRequest("GET", apiurl+"totalStudents", nil)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 	}
 	req.Header.Set("accept", ACCEPT)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -369,7 +369,7 @@ func getTotalStudents(apiurl string, token string) int {
 	resp, err := client.Do(req)
 	if err != nil {
 		println(err)
-		log.Fatal(err)
+		log.Println(err)
 	}
 
 	defer resp.Body.Close()
@@ -380,7 +380,7 @@ func getTotalStudents(apiurl string, token string) int {
 	}
 	log.Printf("body total students: %s\n", bodyText)
 
-	// Deserializa o corpo da resposta para a struct TotalReviewResponse
+	// Deserialize response to TotalReviewResponse
 	var response TotalStudentsResponse
 	err = json.Unmarshal(bodyText, &response)
 	if err != nil {
@@ -416,7 +416,7 @@ func getTotalReviews(apiurl string, token string) int {
 	}
 	log.Printf("body total reviews: %s\n\n", bodyText)
 
-	// Deserializa o corpo da resposta para a struct TotalReviewResponse
+	// Deserilize body to TotalReviewResponse
 	var response TotalReviewResponse
 	err = json.Unmarshal(bodyText, &response)
 	if err != nil {
@@ -432,7 +432,7 @@ func loadFeed() []FeedItem {
 	fp := gofeed.NewParser()
 	feed, err := fp.ParseURL("https://blog.guerra.academy/rss/")
 	if err != nil {
-		log.Println("Erro ao analisar o feed RSS:", err)
+		log.Println("Error reading RSS:", err)
 		return nil
 	}
 	var feedItems []FeedItem
@@ -442,7 +442,7 @@ func loadFeed() []FeedItem {
 			Title:       item.Title,
 			Link:        item.Link,
 			Description: template.HTML(item.Description),
-			Published:   parsedTime.Format("02/01/2006"), // Formata a data
+			Published:   parsedTime.Format("02/01/2006"),
 		}
 
 		if len(item.Extensions["media"]["content"]) > 0 {

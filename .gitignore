@@ -2,3 +2,4 @@
 *db
 *.sh
 .DS_Store
+*env
