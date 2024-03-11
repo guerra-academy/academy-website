@@ -92,7 +92,7 @@ var (
 	DSN            = os.Getenv("DSN")
 	SITE           = os.Getenv("SITE")
 	CAPTCHASITEKEY = os.Getenv("CAPTCHASITEKEY")
-	USERECAPTCHA   = os.Getenv("CAPTCHASITEKEY")
+	USERECAPTCHA   = os.Getenv("USERECAPTCHA")
 )
 
 func validateEmail(email string) bool {
@@ -254,10 +254,12 @@ func main() {
 			return
 		}
 
-		if !validateRecaptcha(usuario.Recaptcha) {
-			log.Println("Recaptcha response:" + usuario.Recaptcha)
-			c.JSON(http.StatusBadRequest, gin.H{"error": "Recaptcha inválido"})
-			return
+		if USERECAPTCHA == "true" {
+			if !validateRecaptcha(usuario.Recaptcha) {
+				log.Println("Recaptcha response:" + usuario.Recaptcha)
+				c.JSON(http.StatusBadRequest, gin.H{"error": "Recaptcha inválido"})
+				return
+			}
 		}
 
 		// set DATE / HOUR and set user to be subscribed
