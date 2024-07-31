@@ -9,15 +9,14 @@ Please refer to the provided architecture diagram for an overview of the system 
 # Build Instructions
 To compile the website backend from source code, follow these steps:
 
-bash
-Copy code
+```
 cd front-end
 go build -v ./...
 sudo mkdir -p ${{ env.BACKEND_DIR }}
 sudo service academy stop
 sudo cp ./academy ${{ env.BACKEND_DIR }}
 sudo cp -r ./templates ${{ env.BACKEND_DIR }}
-
+```
 
 # Prerequisites
 The setup requires the following:
