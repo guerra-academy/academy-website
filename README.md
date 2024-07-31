@@ -21,10 +21,10 @@ sudo cp -r ./templates ${{ env.BACKEND_DIR }}
 # Prerequisites
 The setup requires the following:
 
-Nginx and Git must be installed on the server.
-Go 1.19.2 should be downloaded and extracted in /usr/local.
-The Go environment variable must be set to include its binaries in the PATH.
-AWS CLI must be installed for any AWS-related operations.
-The correct Nginx configuration must be copied to /etc/nginx/sites-enabled/default.
-DNS records must be properly configured in Cloudflare.
-For full installation and configuration details, consult the provided Ansible playbook (config-site.yml).
+* Nginx and Git must be installed on the server.
+* Go 1.19.2 should be downloaded and extracted in /usr/local.
+* The Go environment variable must be set to include its binaries in the PATH.
+* AWS CLI must be installed for any AWS-related operations.
+* The correct Nginx configuration must be copied to /etc/nginx/sites-enabled/default.
+* DNS records must be properly configured in Cloudflare.
+* For full installation and configuration details, consult the provided Ansible playbook (config-site.yml).
